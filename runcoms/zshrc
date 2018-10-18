@@ -4,10 +4,47 @@
 # Authors:
 #   Sorin Ionescu <sorin.ionescu@gmail.com>
 #
+echo 'hey'
+zmodload zsh/zprof
 
 # Source Prezto.
 if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
   source "${ZDOTDIR:-$HOME}/.zprezto/init.zsh"
 fi
 
+# Plenty of ls colors
+source ${ZPREZTODIR}/runcoms/ls_colors.sh
+
+# All the glob
+setopt EXTENDED_GLOB
+setopt NO_CASE_GLOB
+setopt NUMERIC_GLOB_SORT
+# Better array expansion ('foo${bar}foo' will surround all variables of bar now)
+setopt RC_EXPAND_PARAM
+
+# Completion stuff
+pip completion --zsh &>/dev/null  # pip zsh completion
+
+# Home and end keys please
+bindkey '\e[1~' beginning-of-line
+bindkey '\e[4~' end-of-line
+
+# Incremental search please
+bindkey "^[0A" up-line-or-search
+bindkey "^[0B" down-line-or-search
+bindkey -M vicmd "k" up-line-or-search
+bindkey -M vicmd "j" down-line-or-search
+bindkey -M vicmd "/" history-incremental-search-backward
+bindkey -M vicmd "?" history-incremental-search-forward
+bindkey -M vicmd "//" history-beginning-search-backward
+bindkey -M vicmd "??" history-beginning-search-forward
+
+bindkey -M vicmd "q" push-line
+
 # Customize to your needs...
+alias resrc='. ${ZDOTDIR}/.zshrc; . ${ZDOTDIR}/.zshenv'
+alias spm='sudo pacman -S'
+alias spmu='sudo pacman -Syu'
+alias tmux="tmux -f ${XDG_CONFIG_HOME}/tmux/tmux.conf"
+alias vi=nvim
+zprof

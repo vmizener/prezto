@@ -16,10 +16,11 @@
 
 # Execute code only if STDERR is bound to a TTY.
 [[ -o INTERACTIVE && -t 2 ]] && {
+  echo -e "The gates of Zeltennia Castle open for you, ${B_WHT}`whoami`${C_RST}!"
 
   # Print a random, hopefully interesting, adage.
   if (( $+commands[fortune] )); then
-    fortune -s
+    fortune -s | cowsay -f small
     print
   fi
 
