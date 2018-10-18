@@ -4,8 +4,6 @@
 # Authors:
 #   Sorin Ionescu <sorin.ionescu@gmail.com>
 #
-echo 'hey'
-zmodload zsh/zprof
 
 # Source Prezto.
 if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
@@ -47,4 +45,3 @@ alias spm='sudo pacman -S'
 alias spmu='sudo pacman -Syu'
 alias tmux="tmux -f ${XDG_CONFIG_HOME}/tmux/tmux.conf"
 alias vi=nvim
-zprof
