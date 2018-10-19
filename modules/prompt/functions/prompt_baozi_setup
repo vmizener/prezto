@@ -1,10 +1,9 @@
 #
 # A two-line, Powerline-inspired theme that displays contextual information.
+# Two-line theme based on the "paradox" theme.
 #
 # This theme requires a patched Powerline font, get them from
 # https://github.com/Lokaltog/powerline-fonts.
-#
-# Based on paradox theme.
 
 # Load dependencies.
 pmodload 'helper'

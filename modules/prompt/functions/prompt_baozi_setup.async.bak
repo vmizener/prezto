@@ -1,0 +1,227 @@
+#
+# A two-line, Powerline-inspired theme that displays contextual information.
+# Two-line theme based on the "paradox" theme.
+#
+# This theme requires a patched Powerline font, get them from
+# https://github.com/Lokaltog/powerline-fonts.
+
+# Load dependencies.
+pmodload 'helper'
+
+function prompt_baozi_async_callback {
+  case $1 in
+    #####################
+    # Git prompt callback
+    prompt_baozi_async_git)
+      # We can safely split on ':' because it isn't allowed in ref names.
+      IFS=':' read _git_target _git_post_target <<<"$3"
+
+      # The target actually contains 3 space-separated possibilities, so we need to
+      # make sure we grab the first one.
+      _git_target=$(coalesce ${(@)${(z)_git_target}})
+
+      if [[ -z "$_git_target" ]]; then
+        # No git target detected, flush the git fragment and redisplay the prompt.
+	if [[ -n "$_prompt_baozi_git" ]]; then
+	  _prompt_baozi_git=''
+	  zle && zle reset-prompt
+	fi
+      else
+        # Git target detected, update the git fragment and redisplay the prompt.
+	_prompt_baozi_git="${_git_target}${_git_post_target}"
+	zle && zle reset-prompt
+      fi
+      ;;
+  esac
+}
+
+# Define variables.
+_prompt_baozi_current_bg='NONE'
+_prompt_baozi_segment_separator=''
+_prompt_baozi_start_time=$SECONDS
+
+function prompt_baozi_start_segment {
+  local bg fg
+  [[ -n "$1" ]] && bg="%K{$1}" || bg="%k"
+  [[ -n "$2" ]] && fg="%F{$2}" || fg="%f"
+  if [[ "$_prompt_baozi_current_bg" != 'NONE' && "$1" != "$_prompt_baozi_current_bg" ]]; then
+    print -n " $bg%F{$_prompt_baozi_current_bg}$_prompt_baozi_segment_separator$fg "
+  else
+    print -n "$bg$fg "
+  fi
+  _prompt_baozi_current_bg="$1"
+  [[ -n "$3" ]] && print -n "$3"
+}
+
+function prompt_baozi_end_segment {
+  if [[ -n "$_prompt_baozi_current_bg" ]]; then
+    print -n " %k%F{$_prompt_baozi_current_bg}$_prompt_baozi_segment_separator"
+  else
+    print -n "%k"
+  fi
+  print -n "%f"
+  _prompt_baozi_current_bg=''
+}
+
+function prompt_baozi_build_prompt {
+  if [[ -n "$python_info" ]]; then
+    prompt_baozi_start_segment white black '${(e)python_info[virtualenv]}'
+  fi
+
+  #if [[ -n "$git_info" ]]; then
+  #  #prompt_baozi_start_segment green black '${(e)git_info[ref]}${(e)git_info[status]}'
+  #  prompt_baozi_start_segment green black '${_prompt_baozi_git}'
+  #fi
+
+  #prompt_baozi_start_segment black default '%(?::%F{red}✘ )%(!:%F{yellow}⚡ :)%(1j:%F{cyan}⚙ :)%F{blue}%n%F{red}@%F{green}%m%f'
+  #prompt_baozi_start_segment black default '%(?::%F{red}✘ )%(!:%F{yellow}⚡ :)%(1j:%F{cyan}⚙ :)'
+  prompt_baozi_start_segment black blue '$_prompt_baozi_pwd'
+
+  prompt_baozi_end_segment
+}
+
+prompt_baozi_print_elapsed_time() {
+  local end_time=$(( SECONDS - _prompt_baozi_start_time ))
+  local hours minutes seconds remainder
+
+  if (( end_time >= 3600 )); then
+    hours=$(( end_time / 3600 ))
+    remainder=$(( end_time % 3600 ))
+    minutes=$(( remainder / 60 ))
+    seconds=$(( remainder % 60 ))
+    print -P "%B%F{red}>>> elapsed time ${hours}h${minutes}m${seconds}s%b"
+  elif (( end_time >= 60 )); then
+    minutes=$(( end_time / 60 ))
+    seconds=$(( end_time % 60 ))
+    print -P "%B%F{yellow}>>> elapsed time ${minutes}m${seconds}s%b"
+  elif (( end_time > 10 )); then
+    print -P "%B%F{green}>>> elapsed time ${end_time}s%b"
+  fi
+}
+
+function prompt_baozi_async_git {
+  cd -q "$1"
+  if (( $+functions[git-info] )); then
+    git-info
+    print ${git_info[status]}
+  fi
+}
+
+function prompt_baozi_async_tasks {
+  # Initialize async worker.  This needs to be done here and not in
+  # prompt_baozi_setup so the git formatting can be overridden by other prompts.
+  if (( !${prompt_prezto_async_init:-0} )); then
+    async_start_worker prompt_baozi -n
+    async_register_callback prompt_baozi prompt_baozi_async_callback
+    typeset -g prompt_prezto_async_init=1
+  fi
+
+  # Kill the old process of slow commands if it is still running.
+  async_flush_jobs prompt_baozi
+
+  # Compute slow commands in the background.
+  async_job prompt_baozi prompt_baozi_async_git "$PWD"
+}
+
+function prompt_baozi_precmd {
+  setopt LOCAL_OPTIONS
+  unsetopt XTRACE KSH_ARRAYS
+
+  # Format PWD.
+  _prompt_baozi_pwd=$(prompt-pwd)
+
+  # Handle updating git data.  We also clear the git prompt data if we're in a
+  # different git root now.
+  if (( $+functions[git-dir] )); then
+    local new_git_root="$(git-dir 2> /dev/null)"
+    if [[ $new_git_root != $_baozi_cur_git_root ]]; then
+      _prompt_baozi_git=''
+      _baozi_cur_git_root=$new_git_root
+    fi
+  fi
+
+  # Get Python environment information.
+  if (( $+functions[python-info] )); then
+    python-info
+  fi
+
+  # Do all the remaining asynchronous tasks
+  prompt_baozi_async_tasks
+
+  # Calculate and print the elapsed time.
+  prompt_baozi_print_elapsed_time
+}
+
+function prompt_baozi_preexec {
+  _prompt_baozi_start_time="$SECONDS"
+}
+
+function prompt_baozi_setup {
+  setopt LOCAL_OPTIONS
+  unsetopt XTRACE KSH_ARRAYS
+  prompt_opts=(cr percent sp subst)
+  _prompt_baozi_precmd_async_pid=0
+  _prompt_baozi_precmd_async_data=$(mktemp "${TMPDIR:-/tmp}/baozi-prompt-async-XXXXXXXXXX")
+
+  # Load required functions.
+  autoload -Uz add-zsh-hook
+  autoload -Uz async && async
+
+  # Add hook for calling git-info before each command.
+  add-zsh-hook preexec prompt_baozi_preexec
+  add-zsh-hook precmd prompt_baozi_precmd
+
+  # Set editor-info parameters.
+  zstyle ':prezto:module:editor:info:completing' format '%B%F{red}...%f%b'
+  zstyle ':prezto:module:editor:info:keymap:primary' format '%B%F{blue}❯%f%b'
+  zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '%F{red}♺%f'
+  zstyle ':prezto:module:editor:info:keymap:alternate' format '%B%F{red}❮%f%b'
+
+  # Set git-info parameters.
+  zstyle ':prezto:module:git:info' verbose 'yes'
+  zstyle ':prezto:module:git:info:action' format ' ⁝ %s'
+  zstyle ':prezto:module:git:info:added' format ' ✚'
+  zstyle ':prezto:module:git:info:ahead' format ' ⬆'
+  zstyle ':prezto:module:git:info:behind' format ' ⬇'
+  zstyle ':prezto:module:git:info:branch' format ' %b'
+  zstyle ':prezto:module:git:info:commit' format '➦ %.7c'
+  zstyle ':prezto:module:git:info:deleted' format ' ✖'
+  zstyle ':prezto:module:git:info:dirty' format ' ⁝'
+  zstyle ':prezto:module:git:info:modified' format ' ✱'
+  zstyle ':prezto:module:git:info:position' format '%p'
+  zstyle ':prezto:module:git:info:renamed' format ' ➙'
+  zstyle ':prezto:module:git:info:stashed' format ' S'
+  zstyle ':prezto:module:git:info:unmerged' format ' ═'
+  zstyle ':prezto:module:git:info:untracked' format ' ?'
+  zstyle ':prezto:module:git:info:keys' format \
+    'ref' '$(coalesce "%b" "%p" "%c")' \
+    'status' '%s%D%A%B%S%a%d%m%r%U%u'
+
+  # %v - virtualenv name.
+  zstyle ':prezto:module:python:info:virtualenv' format '%v'
+
+  # Set up non-zero return value display
+  local show_return="✘ "
+  # Default is to show the return value
+  if zstyle -T ':prezto:module:prompt' show-return-val; then
+    show_return+='%? '
+  fi
+
+  # Get the async worker set up.
+  _baozi_cur_git_root=''
+  _prompt_baozi_git=''
+  _prompt_baozi_pwd=''
+
+  # Define prompts.
+  PROMPT='
+${(e)$(prompt_baozi_build_prompt)}
+ ${editor_info[keymap]} '
+  #RPROMPT='%F{yellow}%m %F{blue}[%F{default}%D{%H:%M:%S}%F{blue}]%f'
+  RPROMPT='${editor_info[overwrite]}%(?:: %F{1}'
+  RPROMPT+=${show_return}
+  RPROMPT+='%f)${VIM:+" %B%F{6}V%f%b"}${_prompt_baozi_git}'
+
+  SPROMPT='zsh: correct %F{red}%R%f to %F{green}%r%f [nyae]? '
+}
+
+prompt_baozi_setup "$@"
